@@ -1,7 +1,9 @@
 pub mod copilot_oauth;
+mod copilot_usage;
 mod model;
 pub mod responses;
 
+pub use copilot_usage::{CopilotUsage, QuotaUsage};
 pub use model::{PROVIDER_ID, PROVIDER_NAME, create_language_model};
 
 use std::sync::Arc;
@@ -73,6 +75,15 @@ impl CopilotChatConfiguration {
 
     pub fn access_token_url(&self) -> String {
         format!("https://{}/login/oauth/access_token", self.oauth_domain())
+    }
+
+    pub fn usage_url(&self) -> String {
+        if let Some(enterprise_uri) = &self.enterprise_uri {
+            let domain = Self::parse_domain(enterprise_uri);
+            format!("https://api.{domain}/copilot_internal/user")
+        } else {
+            "https://api.github.com/copilot_internal/user".to_string()
+        }
     }
 
     fn parse_domain(enterprise_uri: &str) -> String {
@@ -629,6 +640,26 @@ impl CopilotChat {
 
     pub fn status(&self) -> CopilotChatStatus {
         self.status.clone()
+    }
+
+    /// Fetches the account's usage for the current billing cycle.
+    ///
+    /// Unlike chat completions this does not need the per-account API endpoint,
+    /// so it can run without first discovering one.
+    pub fn fetch_usage(&self, cx: &App) -> Task<Result<CopilotUsage>> {
+        if !matches!(self.status, CopilotChatStatus::Authorized) {
+            return Task::ready(Err(anyhow!("Not signed in to GitHub Copilot")));
+        }
+
+        let Some(oauth_token) = self.oauth_token.clone() else {
+            return Task::ready(Err(anyhow!("No OAuth token available")));
+        };
+
+        let client = self.client.clone();
+        let configuration = self.configuration.clone();
+        cx.background_spawn(async move {
+            copilot_usage::request_usage(&client, &configuration, &oauth_token).await
+        })
     }
 
     /// Begins the GitHub OAuth device-code flow. Progress is reported through
@@ -1232,6 +1263,10 @@ mod tests {
             configuration.credentials_url(),
             "https://github.com/copilot-agent"
         );
+        assert_eq!(
+            configuration.usage_url(),
+            "https://api.github.com/copilot_internal/user"
+        );
     }
 
     #[test]
@@ -1246,6 +1281,10 @@ mod tests {
         assert_eq!(
             configuration.credentials_url(),
             "https://acme.ghe.com/copilot-agent"
+        );
+        assert_eq!(
+            configuration.usage_url(),
+            "https://api.acme.ghe.com/copilot_internal/user"
         );
     }
 

@@ -213,6 +213,7 @@ pub struct StatusBarSettings {
     pub show_active_file: bool,
     pub active_language_button: bool,
     pub cursor_position_button: bool,
+    pub copilot_usage_button: bool,
     pub line_endings_button: bool,
     pub active_encoding_button: EncodingDisplayOptions,
 }
@@ -225,6 +226,7 @@ impl Settings for StatusBarSettings {
             show_active_file: status_bar.show_active_file.unwrap(),
             active_language_button: status_bar.active_language_button.unwrap(),
             cursor_position_button: status_bar.cursor_position_button.unwrap(),
+            copilot_usage_button: status_bar.copilot_usage_button.unwrap(),
             line_endings_button: status_bar.line_endings_button.unwrap(),
             active_encoding_button: status_bar.active_encoding_button.unwrap(),
         }

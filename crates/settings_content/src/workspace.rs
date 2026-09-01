@@ -548,6 +548,13 @@ pub struct StatusBarSettingsContent {
     ///
     /// Default: true
     pub cursor_position_button: Option<bool>,
+    /// Whether to show the GitHub Copilot usage button in the status bar.
+    ///
+    /// Requires being signed in to Copilot Chat; the button is hidden on plans
+    /// that do not meter AI credits, and whenever `disable_ai` is set.
+    ///
+    /// Default: true
+    pub copilot_usage_button: Option<bool>,
     /// Whether to show active line endings button in the status bar.
     ///
     /// Default: false

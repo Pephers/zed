@@ -1915,6 +1915,8 @@
     "active_language_button": true,
     // Whether to show the cursor position button in the status bar.
     "cursor_position_button": true,
+    // Whether to show the GitHub Copilot usage button in the status bar.
+    "copilot_usage_button": true,
     // Whether to show active line endings button in the status bar.
     "line_endings_button": false,
     // Control when to show the active encoding in the status bar.

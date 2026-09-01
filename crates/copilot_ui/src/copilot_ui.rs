@@ -1,4 +1,5 @@
 mod sign_in;
+mod usage_indicator;
 
 use std::sync::Arc;
 
@@ -12,6 +13,7 @@ pub use sign_in::{
     initiate_sign_out, reinstall_and_sign_in,
 };
 use ui::App;
+pub use usage_indicator::CopilotUsageIndicator;
 use workspace::AppState;
 
 pub fn init(app_state: &Arc<AppState>, cx: &mut App) {

@@ -351,6 +351,15 @@ TBD: Centered layout related settings
     // Clicking the button brings up an input for jumping to a line and column.
     // Defaults to true.
     "cursor_position_button": true,
+    // Show/hide an indicator displaying your GitHub Copilot AI credit usage for
+    // the current billing cycle. Refreshes periodically on its own.
+    // Requires being signed in to Copilot Chat (the agent provider, under the
+    // agent panel's provider settings). Signing in to Copilot for edit
+    // predictions alone is not sufficient, as the two use separate credentials.
+    // Hidden on plans that do not meter AI credits, and whenever "disable_ai"
+    // is enabled.
+    // Defaults to true.
+    "copilot_usage_button": true,
     // Show/hide a button that displays the buffer's line-ending mode.
     // Clicking the button brings up the line-ending selector.
     // Defaults to false.
