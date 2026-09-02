@@ -442,6 +442,8 @@ struct MermaidViewState {
     zoomed_to_fit: bool,
     /// Horizontal scroll position, used when the diagram overflows.
     scroll_handle: ScrollHandle,
+    /// Present while the diagram is shown in a full-window overlay panel.
+    expanded: Option<ExpandedMermaidDiagram>,
     /// The pending debounced re-raster scheduled by the last zoom change.
     debounce_task: Option<Task<()>>,
     /// Overrides the scroll container width, which tests can't obtain from
@@ -469,11 +471,26 @@ impl Default for MermaidViewState {
             zoom: 1.0,
             zoomed_to_fit: false,
             scroll_handle: ScrollHandle::new(),
+            expanded: None,
             debounce_task: None,
             #[cfg(test)]
             container_width_for_test: None,
         }
     }
+}
+
+/// The state of a diagram's full-window overlay panel, held only while the
+/// panel is open. See [`Markdown::expand_mermaid_diagram`].
+pub(crate) struct ExpandedMermaidDiagram {
+    /// Focused while the panel is open, so its keybindings resolve.
+    pub(crate) focus_handle: FocusHandle,
+    /// Scroll position of the panel body. Separate from the inline
+    /// [`MermaidViewState::scroll_handle`] since the inline block stays laid
+    /// out underneath the panel.
+    pub(crate) scroll_handle: ScrollHandle,
+    /// Whatever held focus when the panel opened, handed back on collapse.
+    previous_focus_handle: Option<FocusHandle>,
+    _focus_out_subscription: Subscription,
 }
 
 pub struct Markdown {
@@ -568,7 +585,9 @@ actions!(
         /// Copies the selected text to the clipboard.
         Copy,
         /// Copies the selected text as markdown to the clipboard.
-        CopyAsMarkdown
+        CopyAsMarkdown,
+        /// Collapses an expanded diagram back into the document.
+        CollapseDiagram
     ]
 );
 
@@ -775,6 +794,74 @@ impl Markdown {
     pub(crate) fn toggle_mermaid_tab(&mut self, source_offset: usize) {
         let view = self.mermaid_views.entry(source_offset).or_default();
         view.showing_code = !view.showing_code;
+    }
+
+    pub(crate) fn expanded_mermaid_diagram(
+        &self,
+        source_offset: usize,
+    ) -> Option<&ExpandedMermaidDiagram> {
+        self.mermaid_views.get(&source_offset)?.expanded.as_ref()
+    }
+
+    /// Opens a diagram's full-window overlay panel and focuses it, so its
+    /// keybindings resolve while it is open.
+    pub(crate) fn expand_mermaid_diagram(
+        &mut self,
+        source_offset: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let focus_handle = cx.focus_handle();
+        // The panel is a deferred draw, so it paints above everything that
+        // isn't, including the workspace's modal layer: a modal opened while
+        // the panel is up (the command palette, say) would otherwise hold the
+        // keyboard while sitting invisible behind the panel. Modals take focus
+        // when they open, so yielding on focus loss keeps the panel from
+        // covering them.
+        let focus_out_subscription =
+            cx.on_focus_out(&focus_handle, window, move |this, _event, window, cx| {
+                // Deactivating the window also reports focus out, and closing
+                // the panel just because the user looked at another app would
+                // be hostile; only a focus change within the window dismisses.
+                if window.is_window_active() {
+                    this.collapse_mermaid_diagram(source_offset, window, cx);
+                }
+            });
+        let view = self.mermaid_views.entry(source_offset).or_default();
+        view.expanded = Some(ExpandedMermaidDiagram {
+            focus_handle: focus_handle.clone(),
+            scroll_handle: ScrollHandle::new(),
+            previous_focus_handle: window.focused(cx),
+            _focus_out_subscription: focus_out_subscription,
+        });
+        focus_handle.focus(window, cx);
+        cx.notify();
+    }
+
+    /// Closes a diagram's overlay panel. Focus returns to whatever held it
+    /// before the panel opened, since the panel is about to leave the dispatch
+    /// tree; as in the workspace's modal layer, focus is only restored if the
+    /// panel still holds it, so a panel closed while the user is working
+    /// elsewhere doesn't steal it.
+    pub(crate) fn collapse_mermaid_diagram(
+        &mut self,
+        source_offset: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(expanded) = self
+            .mermaid_views
+            .get_mut(&source_offset)
+            .and_then(|view| view.expanded.take())
+        else {
+            return;
+        };
+        if let Some(previous_focus_handle) = expanded.previous_focus_handle
+            && expanded.focus_handle.contains_focused(window, cx)
+        {
+            previous_focus_handle.focus(window, cx);
+        }
+        cx.notify();
     }
 
     pub(crate) fn mermaid_zoom_level(&self, source_offset: usize) -> f32 {
